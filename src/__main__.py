@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import ValidationError
 from llm_sdk import Small_LLM_Model
 from src.decoding.vocab import build_id_to_token, load_vocab
-
+from src.build_result import run_pipeline
 
 def get_arg() -> Any:
     parser = argparse.ArgumentParser()
@@ -18,17 +18,27 @@ def get_arg() -> Any:
 def main() -> None:
     try: 
         parser = get_arg()
-        func = func_validator(parser.functions_definition, [])
-        propmt = prompt_validator(parser.input, [])
+        funcs = func_validator(parser.functions_definition, [])
+        prompts = prompt_validator(parser.input, [])
         model = Small_LLM_Model(model_name=parser.model)
         vocab = load_vocab(model)
         id_to_token = build_id_to_token(vocab)
-        print(len(vocab), len(id_to_token))
-        print(id_to_token[0], id_to_token[1])
+        run_pipeline(
+            model,
+            vocab,
+            id_to_token,
+            prompts,
+            funcs,
+            parser.output
+        )
     except ValueError as err:
         print(f"ERROR: {err}")
     except ValidationError as err:
         print(err.errors()[0])
     
 
-main()
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as err:
+        print(f"ERROR: {err}")
