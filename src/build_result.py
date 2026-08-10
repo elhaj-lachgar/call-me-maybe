@@ -3,6 +3,7 @@ from typing import Dict, List
 from llm_sdk import Small_LLM_Model
 from src.sys_prompt import orchestrate_one_prompt
 import json
+import os
 def build_result_object(prompt: Prompt, orchestration_result: Dict[str, object]) -> Dict[str, object]:
     return {
         "prompt": prompt.prompt,
@@ -30,6 +31,9 @@ def run_pipeline(
             continue
 
     try:
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         with open(output_path, mode="w", encoding="utf-8") as file:
             json.dump(results, file, indent=2)
     except OSError as e:

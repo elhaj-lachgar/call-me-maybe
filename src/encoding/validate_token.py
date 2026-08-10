@@ -6,29 +6,39 @@ def is_token_allowed_as_string(token: str) -> bool:
     return '"' not in token
 
 def compute_allowed_string_tokens(vocab: Dict[str, int]) -> Set[str]:
-    allwod = set()
+    allowed = set()
     for key in vocab:
         if not is_token_allowed_as_string(key):
             continue
-        allwod.add(key)
-    return allwod
+        allowed.add(key)
+    return allowed
 
 def generate_string(model: Small_LLM_Model,
                     vocab: Dict[str, int],
                     id_to_token: Dict[int, str],
                     input_ids: List[int],
-                    max_length:int=50) -> str:
+                    max_length:int=20) -> str:
     try:
-        content = ""
+        generated_ids = []
         index = 0
-        allowed = compute_allowed_string_tokens(vocab)
+        content_allowed = compute_allowed_string_tokens(vocab)
+        quote_allowed = content_allowed | ({'"'} & set(vocab.keys()))
+
         while index < max_length:
             logits = model.get_logits_from_input_ids(input_ids)
-            token = pick_best_token(allowed, vocab, logits, id_to_token)
-            input_ids.append(vocab[token])
-            content += token
+            token = pick_best_token(quote_allowed, vocab, logits, id_to_token)
+
+            if token == '"':
+                break
+
+            token_id = vocab[token]
+            input_ids.append(token_id)
+            generated_ids.append(token_id)
             index += 1
 
-        return content
+        text = model.decode(generated_ids)
+        if "\n" in text:
+            text = text.split("\n")[0]
+        return text.strip().strip("'\"")
     except Exception:
         raise ValueError("failed to generate string.")

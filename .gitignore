@@ -7,8 +7,6 @@ wheels/
 test*
 *.egg-info
 .git
-data
-llm_sdk
 .python*
 uv*
 *.zip

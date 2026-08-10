@@ -7,7 +7,12 @@ from src.decoding.number_handler import generate_number
 from src.encoding.validate_token import generate_string
 
 def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
-    text = "You are a function calling assistant. Available functions:\n"
+    text = "You are a function calling assistant. You must choose exactly one function and produce values for its parameters, as if filling in a JSON object.\n\n"
+    text += "Example:\n"
+    text += 'Function: fn_substitute_string_with_regex(source_string: string, regex: string, replacement: string)\n'
+    text += 'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' with X"\n'
+    text += 'Output: {"name": "fn_substitute_string_with_regex", "parameters": {"source_string": "I have 3 cats and 7 dogs", "regex": "\\\\d+", "replacement": "X"}}\n\n'
+    text += "Available functions:\n"
     for func in functions:
         line = f"- {func.name}: {func.description}. Parameters: "
         for par in func.parameters:
@@ -15,6 +20,12 @@ def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
         text += line + "\n"
     text += f"\nUser request: {user_prompt}\nFunction name:"
     return text
+
+def append_text_to_input_ids(model: Small_LLM_Model, input_ids: List[int], text: str) -> None:
+    """Encode extra text and append its ids to input_ids in place, so the
+    model 'sees' this text as if it had generated/received it as context."""
+    extra_ids = encode_prompt(model, text)
+    input_ids.extend(extra_ids)
 
 def orchestrate_one_prompt(
     model: Small_LLM_Model,
@@ -42,8 +53,18 @@ def orchestrate_one_prompt(
 
         parameters: Dict[str, object] = {}
         for param_name, param_info in matched_func.parameters.items():
+            if param_info.type == "string":
+                cue = f"\nGive ONLY the string value for parameter '{param_name}', nothing else.\nValue: \""
+            else:
+                cue = f"\nGive ONLY the {param_info.type} value for parameter '{param_name}', nothing else.\nValue:"
+            append_text_to_input_ids(model, input_ids, cue)
+
             if param_info.type == "number":
-                value = generate_number(model, vocab, id_to_token, input_ids)
+                raw_value = generate_number(model, vocab, id_to_token, input_ids)
+                try:
+                    value: object = float(raw_value)
+                except ValueError:
+                    raise ValueError(f"model produced invalid number for '{param_name}': {raw_value!r}")
             elif param_info.type == "string":
                 value = generate_string(model, vocab, id_to_token, input_ids)
             elif param_info.type == "boolean":
