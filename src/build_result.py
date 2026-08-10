@@ -26,6 +26,7 @@ def run_pipeline(
             obj = orchestrate_one_prompt(model, vocab, id_to_token, prompt, functions)
             res = build_result_object(prompt, obj)
             results.append(res)
+            print(obj)
         except ValueError as e:
             print(f"skipping prompt {prompt.prompt!r}: {e}")
             continue
