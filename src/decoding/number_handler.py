@@ -40,7 +40,7 @@ def generate_number(
         ) -> str:
     try:
         partial = ""
-        alloweds = {"+", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+        alloweds = {"+", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "}", "\n"}
         stop_tokens = {",", "}", "\n"} & set(vocab.keys())
         while len(partial) < max_len:
             logits = model.get_logits_from_input_ids(input_ids)
