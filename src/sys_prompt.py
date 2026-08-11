@@ -8,16 +8,16 @@ from src.encoding.validate_token import generate_string
 
 def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
     text = "You are a function calling assistant. You must choose exactly one function and produce values for its parameters, as if filling in a JSON object.\n\n"
-    text += "Example:\n"
-    text += 'Function: fn_substitute_string_with_regex(source_string: string, regex: string, replacement: string)\n'
-    text += 'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' with X"\n'
-    text += 'Output: {"name": "fn_substitute_string_with_regex", "parameters": {"source_string": "I have 3 cats and 7 dogs", "regex": "\\\\d+", "replacement": "X"}}\n\n'
     text += "Available functions:\n"
     for func in functions:
         line = f"- {func.name}: {func.description}. Parameters: "
         for par in func.parameters:
             line += f"{par} ({func.parameters[par].type}) "
         text += line + "\n"
+    text += "Example:\n"
+    text += 'Function: fn_substitute_string_with_regex(source_string: string, regex: string, replacement: string)\n'
+    text += 'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' with X"\n'
+    text += 'Output: {"name": "fn_substitute_string_with_regex", "parameters": {"source_string": "I have 3 cats and 7 dogs", "regex": "\\\\d+", "replacement": "X"}}\n\n'
     text += f"\nUser request: {user_prompt}\nFunction name:"
     return text
 

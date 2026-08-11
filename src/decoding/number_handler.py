@@ -40,21 +40,12 @@ def generate_number(
         ) -> str:
     try:
         partial = ""
-        candidates = get_number_candidate_tokens(vocab)
-        stop_tokens = {",", "}"} & set(vocab.keys())
+        alloweds = {"+", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+        stop_tokens = {",", "}", "\n"} & set(vocab.keys())
         while len(partial) < max_len:
-
-            alloweds = compute_allowed_number_tokens(
-                candidates,
-                vocab,
-                partial
-            )
-            allowed_with_stop = alloweds | stop_tokens
-            if not allowed_with_stop:
-                break
             logits = model.get_logits_from_input_ids(input_ids)
             token = pick_best_token(
-                allowed_with_stop,
+                alloweds,
                 vocab,
                 logits,
                 id_to_token
