@@ -16,11 +16,8 @@ def is_token_allowed_as_number(token: str, partial_output: str) -> bool:
     return True
 
 def get_number_candidate_tokens(vocab: Dict[str, int]) -> Set[str]:
-    """Tokens made only of digits/./-/+ -- context-independent, so this can be
-    computed once and reused across every step, instead of rescanning the
-    full ~150k-token vocab at each generation step."""
-    number_chars = set("0123456789.-+")
-    return {key for key in vocab if all(c in number_chars for c in key)}
+    number_chars = "0123456789.-+"
+    return {c for c in number_chars if c in vocab}
 
 def compute_allowed_number_tokens(candidates: Set[str], vocab: Dict[str, int], partial_output: str) -> Set[str]:
     allowed = set()
@@ -28,7 +25,6 @@ def compute_allowed_number_tokens(candidates: Set[str], vocab: Dict[str, int], p
         if not is_token_allowed_as_number(key, partial_output):
             continue
         allowed.add(key)
-
     return allowed
 
 def generate_number(
@@ -36,24 +32,23 @@ def generate_number(
         vocab: Dict[str, int],
         id_to_token: Dict[int, str],
         input_ids: List[int],
-        max_len : int = 10
+        max_len: int = 6
         ) -> str:
     try:
         partial = ""
-        alloweds = {"+", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "}", "\n"}
-        stop_tokens = {",", "}", "\n"} & set(vocab.keys())
+        candidates = get_number_candidate_tokens(vocab)
+        stop_tokens = {",", "}"} & set(vocab.keys())
         while len(partial) < max_len:
+            alloweds = compute_allowed_number_tokens(candidates, vocab, partial)
+            allowed_with_stop = alloweds | stop_tokens
+            if not allowed_with_stop:
+                break
             logits = model.get_logits_from_input_ids(input_ids)
-            token = pick_best_token(
-                alloweds,
-                vocab,
-                logits,
-                id_to_token
-            )
+            token = pick_best_token(allowed_with_stop, vocab, logits, id_to_token)
             if token in stop_tokens:
                 break
             input_ids.append(vocab[token])
             partial += token
         return partial
     except Exception:
-        raise ValueError('failed to constrain the content')
+        raise ValueError("failed to constrain the content")

@@ -6,26 +6,79 @@ from src.decoding.constrained import generate_constrained
 from src.decoding.number_handler import generate_number
 from src.encoding.validate_token import generate_string
 
+
+REGEX_PATTERN_EXAMPLES = [
+    ("digits / numbers", r"\d+"),
+    ("letters only", r"[a-zA-Z]+"),
+    ("vowels", r"[aeiouAEIOU]"),
+    ("whitespace", r"\s+"),
+    ("punctuation", r"[^\w\s]"),
+    ("a specific word, e.g. 'cat'", r"cat"),
+]
+
+
+def build_regex_hint_block() -> str:
+    """Compact list of regex pattern examples."""
+    lines = ["Common regex patterns:"]
+    for description, pattern in REGEX_PATTERN_EXAMPLES:
+        lines.append(f"  - {description} -> {pattern}")
+    return "\n".join(lines)
+
+
+def build_regex_function_example() -> str:
+    """A full worked request -> JSON example for a function that has a
+    'regex' parameter. Injected next to that function's own definition."""
+    text = 'Example for a function with a "regex" parameter:\n'
+    text += 'Function: fn_substitute_string_with_regex(source_string: string, regex: string, replacement: string)\n'
+    text += 'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' with X"\n'
+    text += (
+        'Output: {"name": "fn_substitute_string_with_regex", '
+        '"parameters": {"source_string": "I have 3 cats and 7 dogs", '
+        '"regex": "\\\\d+", "replacement": "X"}}\n'
+    )
+    text += build_regex_hint_block() + "\n"
+    return text
+
+
+def _func_has_regex_param(func: Func) -> bool:
+    return any("regex" in name.lower() for name in func.parameters)
+
+
+
 def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
+    """Builds the full system + user prompt text.
+
+    Ordering matters for small models: information placed closer to the
+    generation point tends to get more weight ('recency'), so the least
+    critical text (role description) goes first, and the actual user
+    request goes last, right before generation starts.
+    """
     text = "You are a function calling assistant. You must choose exactly one function and produce values for its parameters, as if filling in a JSON object.\n\n"
+
     text += "Available functions:\n"
     for func in functions:
         line = f"- {func.name}: {func.description}. Parameters: "
         for par in func.parameters:
             line += f"{par} ({func.parameters[par].type}) "
         text += line + "\n"
+        if _func_has_regex_param(func):
+            text += build_regex_function_example() + "\n"
+
     text += "Example:\n"
-    text += 'Function: fn_substitute_string_with_regex(source_string: string, regex: string, replacement: string)\n'
-    text += 'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' with X"\n'
-    text += 'Output: {"name": "fn_substitute_string_with_regex", "parameters": {"source_string": "I have 3 cats and 7 dogs", "regex": "\\\\d+", "replacement": "X"}}\n\n'
-    text += f"\nUser request: {user_prompt}\nFunction name:"
+    text += 'Function: fn_add_numbers(a: number, b: number)\n'
+    text += 'Request: "What is 4 plus 5?"\n'
+    text += 'Output: {"name": "fn_add_numbers", "parameters": {"a": 4, "b": 5}}\n\n'
+
+    text += f"User request: {user_prompt}\nFunction name:"
     return text
+
 
 def append_text_to_input_ids(model: Small_LLM_Model, input_ids: List[int], text: str) -> None:
     """Encode extra text and append its ids to input_ids in place, so the
     model 'sees' this text as if it had generated/received it as context."""
     extra_ids = encode_prompt(model, text)
     input_ids.extend(extra_ids)
+
 
 def orchestrate_one_prompt(
     model: Small_LLM_Model,
@@ -53,7 +106,13 @@ def orchestrate_one_prompt(
 
         parameters: Dict[str, object] = {}
         for param_name, param_info in matched_func.parameters.items():
-            if param_info.type == "string":
+            if param_info.type == "string" and "regex" in param_name.lower():
+                cue = (
+                    f"\nGive ONLY a regular expression pattern for parameter '{param_name}'.\n"
+                    + build_regex_hint_block()
+                    + "\nValue: \""
+                )
+            elif param_info.type == "string":
                 cue = f"\nGive ONLY the string value for parameter '{param_name}', nothing else.\nValue: \""
             else:
                 cue = f"\nGive ONLY the {param_info.type} value for parameter '{param_name}', nothing else.\nValue:"
