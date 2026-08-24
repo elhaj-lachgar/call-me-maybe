@@ -1,22 +1,22 @@
 import argparse
-from src.validator.methods import func_validator, prompt_validator
-from typing import Any
 from pydantic import ValidationError
 from llm_sdk import Small_LLM_Model
-from src.decoding.vocab import build_id_to_token, load_vocab
+from src.validator.methods import func_validator, prompt_validator
+from src.decoding.vocab import load_vocab, build_id_to_token
 from src.build_result import run_pipeline
 
-def get_arg() -> Any:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="data/input/function_calling_tests.json")
-    parser.add_argument("--output", default="data/output/function_calls.json")
-    parser.add_argument("--functions_definition", default="data/input/functions_definition.json")
-    parser.add_argument("--model", default="Qwen/Qwen3-0.6B")
 
+def get_arg() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Call Me Maybe - function calling with constrained decoding")
+    parser.add_argument("--functions_definition", required=True, help="Path to functions_definition.json")
+    parser.add_argument("--input", required=True, help="Path to function_calling_tests.json")
+    parser.add_argument("--output", required=True, help="Path to write function_calling_results.json")
+    parser.add_argument("--model", default="Qwen/Qwen3-0.6B", help="Model name")
     return parser.parse_args()
 
+
 def main() -> None:
-    try: 
+    try:
         parser = get_arg()
         funcs = func_validator(parser.functions_definition, [])
         prompts = prompt_validator(parser.input, [])
@@ -35,10 +35,7 @@ def main() -> None:
         print(f"ERROR: {err}")
     except ValidationError as err:
         print(err.errors()[0])
-    
+
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as err:
-        print(f"ERROR: {err}")
+    main()

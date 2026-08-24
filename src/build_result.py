@@ -4,12 +4,15 @@ from llm_sdk import Small_LLM_Model
 from src.sys_prompt import orchestrate_one_prompt
 import json
 import os
+
+
 def build_result_object(prompt: Prompt, orchestration_result: Dict[str, object]) -> Dict[str, object]:
     return {
         "prompt": prompt.prompt,
         "name": orchestration_result["name"],
         "parameters": orchestration_result["parameters"]
     }
+
 
 def run_pipeline(
     model: Small_LLM_Model,
@@ -26,7 +29,6 @@ def run_pipeline(
             obj = orchestrate_one_prompt(model, vocab, id_to_token, prompt, functions)
             res = build_result_object(prompt, obj)
             results.append(res)
-            print(obj)
         except ValueError as e:
             print(f"skipping prompt {prompt.prompt!r}: {e}")
             continue

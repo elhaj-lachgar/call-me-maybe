@@ -1,12 +1,15 @@
+from typing import Set, Dict, List
 from llm_sdk import Small_LLM_Model
-from typing import Dict, Set, List
-from .constrained import pick_best_token
+from src.decoding.constrained import pick_best_token
+
+
 def is_allowed_number_char(c: str, partial_output: str) -> bool:
     return (
         c.isdigit()
         or ((c == "-" or c == "+") and partial_output == "")
         or (c == "." and any(ch.isdigit() for ch in partial_output) and "." not in partial_output)
     )
+
 
 def is_token_allowed_as_number(token: str, partial_output: str) -> bool:
     for c in token:
@@ -15,9 +18,13 @@ def is_token_allowed_as_number(token: str, partial_output: str) -> bool:
         partial_output += c
     return True
 
+
 def get_number_candidate_tokens(vocab: Dict[str, int]) -> Set[str]:
+    """Only the ~14 possible number characters, checked by direct lookup
+    instead of scanning the full ~150k-token vocab."""
     number_chars = "0123456789.-+"
     return {c for c in number_chars if c in vocab}
+
 
 def compute_allowed_number_tokens(candidates: Set[str], vocab: Dict[str, int], partial_output: str) -> Set[str]:
     allowed = set()
@@ -26,6 +33,7 @@ def compute_allowed_number_tokens(candidates: Set[str], vocab: Dict[str, int], p
             continue
         allowed.add(key)
     return allowed
+
 
 def generate_number(
         model: Small_LLM_Model,
@@ -50,5 +58,5 @@ def generate_number(
             input_ids.append(vocab[token])
             partial += token
         return partial
-    except Exception:
-        raise ValueError("failed to constrain the content")
+    except Exception as e:
+        raise ValueError(f"failed to constrain the content: {e}")
