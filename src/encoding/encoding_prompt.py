@@ -6,4 +6,5 @@ def encode_prompt(model: Small_LLM_Model, text: str) -> List[int]:
     torser = model.encode(text)
     if torser.numel() == 0:
         raise ValueError('failed to encode prompt')
-    return torser[0].tolist()
+    result: List[int] = torser[0].tolist()
+    return result

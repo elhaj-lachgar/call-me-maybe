@@ -1,3 +1,6 @@
+"""Prompt construction and per-prompt orchestration: builds the system
+prompt, generates the function name, then generates each parameter value
+with a targeted cue and the appropriate constrained-decoding function."""
 from typing import List, Dict, Optional
 import re
 from src.validator.models import Func, Prompt
@@ -7,13 +10,6 @@ from src.decoding.constrained import generate_constrained
 from src.decoding.number_handler import generate_number
 from src.encoding.validate_token import generate_string, generate_regex_value
 
-# --- regex few-shot examples -------------------------------------------
-# Kept as data so it's easy to find and extend. A 0.6B model doesn't
-# reliably generalize "regex" from a single distant example, so we give
-# several short pattern -> meaning pairs, placed close to where the model
-# actually has to produce one. Word-match examples use \b...\b so they
-# stay consistent with the structural rule enforced in generate_regex_value
-# (a regex value must start with '[' or '\').
 
 REGEX_PATTERN_EXAMPLES = [
     ("digits / numbers", r"\d+"),
@@ -26,6 +22,11 @@ REGEX_PATTERN_EXAMPLES = [
 
 
 def build_regex_hint_block() -> str:
+    """Build a compact, human-readable list of example regex patterns.
+
+    Returns:
+        A multi-line string listing each pattern description and example.
+    """
     lines = ["Common regex patterns:"]
     for description, pattern in REGEX_PATTERN_EXAMPLES:
         lines.append(f"  - {description} -> {pattern}")
@@ -33,13 +34,20 @@ def build_regex_hint_block() -> str:
 
 
 def build_regex_function_example() -> str:
+    """Build a full worked request -> JSON example for a function that
+    has a "regex" parameter, injected next to that function's own
+    definition in the prompt.
+
+    Returns:
+        The example text block, including the pattern hint list.
+    """
     text = 'Example for a function with a "regex" parameter:\n'
     text += 'Function: fn_substitute_string_with_regex(source_string: string, regex: string, replacement: string)\n'
     text += 'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' with X"\n'
     text += (
         'Output: {"name": "fn_substitute_string_with_regex", '
         '"parameters": {"source_string": "I have 3 cats and 7 dogs", '
-        '"regex": "\\\\d+", "replacement": "X"}}\n'
+        '"regex": "\\d+", "replacement": "X"}}\n'
     )
     text += build_regex_hint_block() + "\n"
     return text
@@ -49,7 +57,14 @@ def _guess_regex_hint(user_prompt: str) -> Optional[str]:
     """Scan the raw user request for clues about what regex pattern fits.
     This does NOT set the final value -- it only strengthens the context
     given to the model, which still generates the actual token sequence
-    itself via constrained decoding (generate_regex_value)."""
+    itself via constrained decoding (generate_regex_value).
+
+    Args:
+        user_prompt: The raw natural-language request.
+
+    Returns:
+        A likely regex pattern hint, or None if no clue was found.
+    """
     lower = user_prompt.lower()
     if "digit" in lower or "number" in lower:
         return r"\d+"
@@ -62,24 +77,52 @@ def _guess_regex_hint(user_prompt: str) -> Optional[str]:
 
 
 def _extract_prompt_numbers(user_prompt: str) -> List[str]:
-    """Numbers written literally in the user request, in order of
+    """Extract numbers written literally in the user request, in order of
     appearance. Used only as a hint in the cue text -- the model still
-    generates the actual digits itself via constrained decoding."""
+    generates the actual digits itself via constrained decoding.
+
+    Args:
+        user_prompt: The raw natural-language request.
+
+    Returns:
+        The literal number substrings found, in order.
+    """
     return re.findall(r"-?\d+(?:\.\d+)?", user_prompt)
 
 
 def _func_has_regex_param(func: Func) -> bool:
+    """Check whether a function definition has a parameter whose name
+    contains "regex".
+
+    Args:
+        func: The function definition to inspect.
+
+    Returns:
+        True if any parameter name contains "regex" (case-insensitive).
+    """
     return any("regex" in name.lower() for name in func.parameters)
 
 
-# --- prompt construction -------------------------------------------------
-
 def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
-    """Ordering matters for small models: information placed closer to the
-    generation point tends to get more weight ('recency'), so the least
+    """Build the full prompt text sent to the model for one request.
+
+    Ordering matters for small models: information placed closer to the
+    generation point tends to get more weight ("recency"), so the least
     critical text (role description) goes first, and the actual user
-    request goes last, right before generation starts."""
-    text = "You are a function calling assistant. You must choose exactly one function and produce values for its parameters, as if filling in a JSON object.\n\n"
+    request goes last, right before generation starts.
+
+    Args:
+        user_prompt: The raw natural-language request from the test file.
+        functions: All available function definitions to advertise.
+
+    Returns:
+        The full text to encode and feed to the model.
+    """
+    text = (
+        "You are a function calling assistant. You must choose exactly "
+        "one function and produce values for its parameters, as if "
+        "filling in a JSON object.\n\n"
+    )
 
     text += "Available functions:\n"
     for func in functions:
@@ -100,13 +143,17 @@ def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
 
 
 def append_text_to_input_ids(model: Small_LLM_Model, input_ids: List[int], text: str) -> None:
-    """Encode extra text and append its ids to input_ids in place, so the
-    model 'sees' this text as if it had generated/received it as context."""
+    """Encode extra text and append its ids to input_ids in place.
+
+    Args:
+        model: The loaded LLM wrapper, used to encode the text.
+        input_ids: The growing list of token ids; mutated in place.
+        text: The extra text to encode and append, so the model "sees"
+            it as if it had generated/received it as context.
+    """
     extra_ids = encode_prompt(model, text)
     input_ids.extend(extra_ids)
 
-
-# --- orchestration ---------------------------------------------------------
 
 def orchestrate_one_prompt(
     model: Small_LLM_Model,
@@ -115,6 +162,24 @@ def orchestrate_one_prompt(
     prompt: Prompt,
     functions: List[Func],
 ) -> Dict[str, object]:
+    """Run the full pipeline for a single prompt: build the prompt text,
+    generate the function name, then generate each parameter value with
+    a type-appropriate cue and constrained-decoding function.
+
+    Args:
+        model: The loaded LLM wrapper.
+        vocab: Mapping of token string to token id.
+        id_to_token: Reverse mapping of token id to token string.
+        prompt: The validated user request to process.
+        functions: All available function definitions.
+
+    Returns:
+        A dict with "name" (the chosen function name) and "parameters"
+        (a dict of parameter name to generated value).
+
+    Raises:
+        ValueError: If any step of generation or matching fails.
+    """
     try:
         text = build_prompt_text(prompt.prompt, functions)
         input_ids = encode_prompt(model, text)
@@ -164,7 +229,11 @@ def orchestrate_one_prompt(
                 )
                 number_param_index += 1
             else:
-                cue = f"\nGive ONLY the {param_info.type} value for parameter '{param_name}', followed immediately by a comma. Do not add extra digits.\nValue:"
+                cue = (
+                    f"\nGive ONLY the {param_info.type} value for parameter "
+                    f"'{param_name}', followed immediately by a comma. "
+                    "Do not add extra digits.\nValue:"
+                )
 
             append_text_to_input_ids(model, input_ids, cue)
 
