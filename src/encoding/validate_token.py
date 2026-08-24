@@ -69,27 +69,41 @@ def generate_regex_value(model: Small_LLM_Model,
                           vocab: Dict[str, int],
                           id_to_token: Dict[int, str],
                           input_ids: List[int],
-                          max_length: int = 20) -> str:
+                          max_length: int = 10) -> str:
     try:
         generated_ids = []
         index = 0
         candidates = get_regex_candidate_tokens(vocab)
         quote_token = {'"'} & set(vocab.keys())
+        last_token = None
+        repeat_count = 0
 
         while index < max_length:
             if index == 0:
-                # first token MUST start a character class or escape
-                # sequence -- this alone rules out literal-sentence output
                 allowed = {t for t in candidates if is_valid_regex_start_token(t)}
             else:
                 allowed = candidates
             allowed = allowed | quote_token
+
+            # break degenerate repetition loops: if the same token has been
+            # picked twice in a row, ban it for this step so the model is
+            # forced to choose something else (or the stop token)
+            if last_token is not None and repeat_count >= 2 and last_token in allowed:
+                allowed = allowed - {last_token}
+                if not allowed:
+                    break
 
             logits = model.get_logits_from_input_ids(input_ids)
             token = pick_best_token(allowed, vocab, logits, id_to_token)
 
             if token == '"':
                 break
+
+            if token == last_token:
+                repeat_count += 1
+            else:
+                repeat_count = 1
+                last_token = token
 
             token_id = vocab[token]
             input_ids.append(token_id)
