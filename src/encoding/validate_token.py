@@ -5,7 +5,7 @@ numbers or function names, there is no fixed target to match against, so
 generation is bounded by a closing quote (") instead, with extra structural
 rules for regex values.
 """
-from typing import Set, Dict, List, Optional
+from typing import Set, Dict, List
 
 from llm_sdk import Small_LLM_Model
 
@@ -140,10 +140,13 @@ def generate_regex_value(
 ) -> str:
     """Generate a regex pattern value via constrained decoding.
 
-    Applies two extra structural rules on top of the generic string
-    generator: the first token must start a character class or escape
-    sequence, and a repetition guard bans a token that has just repeated
-    twice in a row, to break degenerate repetition loops.
+    Applies several extra rules on top of the generic string generator:
+    the first token must start a character class or escape sequence; a
+    repetition guard bans a token that has just repeated twice in a row
+    or that would continue a 2-token oscillation (A, B, A, B, ...); and
+    the final decoded text has any run of repeated backslashes collapsed
+    to a single one, since the model has a strong pretrained bias toward
+    writing JSON-escaped double backslashes even outside a JSON encoder.
 
     Args:
         model: The loaded LLM wrapper providing next-token logits.
@@ -155,7 +158,7 @@ def generate_regex_value(
             stop.
 
     Returns:
-        The decoded, stripped regex pattern value.
+        The decoded, stripped, backslash-normalized regex pattern value.
 
     Raises:
         ValueError: If generation fails for any reason.
@@ -165,8 +168,7 @@ def generate_regex_value(
         index = 0
         candidates = get_regex_candidate_tokens(vocab)
         quote_token = {'"'} & set(vocab.keys())
-        last_token: Optional[str] = None
-        repeat_count = 0
+        recent_tokens: List[str] = []
 
         while index < max_length:
             if index == 0:
@@ -175,13 +177,22 @@ def generate_regex_value(
                 allowed = candidates
             allowed = allowed | quote_token
 
-            # break degenerate repetition loops: if the same token has
-            # been picked twice in a row, ban it for this step so the
-            # model is forced to choose something else (or the stop token)
-            if last_token is not None and repeat_count >= 2 and last_token in allowed:
-                allowed = allowed - {last_token}
-                if not allowed:
-                    break
+            # break simple repetition (A, A) and 2-token oscillation
+            # (A, B, A, B) loops by banning whichever token would
+            # continue the pattern for this step
+            banned = set()
+            if len(recent_tokens) >= 2 and recent_tokens[-1] == recent_tokens[-2]:
+                banned.add(recent_tokens[-1])
+            if (
+                len(recent_tokens) >= 3
+                and recent_tokens[-1] == recent_tokens[-3]
+                and recent_tokens[-1] != recent_tokens[-2]
+            ):
+                banned.add(recent_tokens[-2])
+            if banned:
+                reduced = allowed - banned
+                if reduced:
+                    allowed = reduced
 
             logits = model.get_logits_from_input_ids(input_ids)
             token = pick_best_token(allowed, vocab, logits, id_to_token)
@@ -189,11 +200,7 @@ def generate_regex_value(
             if token == '"':
                 break
 
-            if token == last_token:
-                repeat_count += 1
-            else:
-                repeat_count = 1
-                last_token = token
+            recent_tokens.append(token)
 
             token_id = vocab[token]
             input_ids.append(token_id)
@@ -203,6 +210,13 @@ def generate_regex_value(
         text: str = model.decode(generated_ids)
         if "\n" in text:
             text = text.split("\n")[0]
-        return text.strip().strip("'\"")
+        text = text.strip().strip("'\"")
+        # collapse any run of repeated backslashes (e.g. "\\\\b" -> "\\b"):
+        # the model tends to double-escape backslashes as if writing
+        # directly into a JSON encoder, even though this raw text IS the
+        # final value.
+        while "\\\\" in text:
+            text = text.replace("\\\\", "\\")
+        return text
     except Exception as e:
         raise ValueError(f"failed to generate regex value: {e}")
