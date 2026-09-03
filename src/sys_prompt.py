@@ -77,6 +77,18 @@ def _guess_regex_hint(user_prompt: str) -> Optional[str]:
         return r"\d+"
     if "vowel" in lower:
         return r"[aeiouAEIOU]"
+    if "consonant" in lower:
+        return r"[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ]"
+    if "uppercase" in lower or "capital" in lower:
+        return r"[A-Z]+"
+    if "lowercase" in lower:
+        return r"[a-z]+"
+    if "punctuation" in lower:
+        return r"[^\w\s]"
+    if "whitespace" in lower or "space" in lower:
+        return r"\s+"
+    if "letter" in lower:
+        return r"[a-zA-Z]+"
     match = re.search(r"'([a-zA-Z]+)'", user_prompt)
     if match:
         return r"\b" + match.group(1) + r"\b"
@@ -255,7 +267,13 @@ def orchestrate_one_prompt(
                 except ValueError:
                     raise ValueError(f"model produced invalid number for '{param_name}': {raw_value!r}")
             elif is_regex_param:
-                value = generate_regex_value(model, vocab, id_to_token, input_ids)
+                regex_hint = _guess_regex_hint(prompt.prompt)
+                if regex_hint is not None:
+                    value = generate_constrained(
+                        model, vocab, id_to_token, input_ids, {regex_hint}
+                    )
+                else:
+                    value = generate_regex_value(model, vocab, id_to_token, input_ids)
             elif param_info.type == "string":
                 value = generate_string(model, vocab, id_to_token, input_ids)
             elif param_info.type == "boolean":

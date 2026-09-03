@@ -137,16 +137,19 @@ def generate_regex_value(
     id_to_token: Dict[int, str],
     input_ids: List[int],
     max_length: int = 10,
+    max_token_repeats: int = 2,
 ) -> str:
     """Generate a regex pattern value via constrained decoding.
 
     Applies several extra rules on top of the generic string generator:
     the first token must start a character class or escape sequence; a
-    repetition guard bans a token that has just repeated twice in a row
-    or that would continue a 2-token oscillation (A, B, A, B, ...); and
-    the final decoded text has any run of repeated backslashes collapsed
-    to a single one, since the model has a strong pretrained bias toward
-    writing JSON-escaped double backslashes even outside a JSON encoder.
+    frequency cap bans any single token once it has already appeared
+    max_token_repeats times in this value, which breaks both simple
+    repetition and longer oscillation loops (e.g. alternating between
+    two tokens many times); and the final decoded text has any run of
+    repeated backslashes collapsed to a single one, since the model has
+    a strong pretrained bias toward writing JSON-escaped double
+    backslashes even outside a JSON encoder.
 
     Args:
         model: The loaded LLM wrapper providing next-token logits.
@@ -156,6 +159,9 @@ def generate_regex_value(
             far; mutated in place as new tokens are generated.
         max_length: Maximum number of tokens to generate before forcing a
             stop.
+        max_token_repeats: Maximum number of times any single token may
+            appear in one generated value before being banned for the
+            rest of generation.
 
     Returns:
         The decoded, stripped, backslash-normalized regex pattern value.
@@ -168,7 +174,7 @@ def generate_regex_value(
         index = 0
         candidates = get_regex_candidate_tokens(vocab)
         quote_token = {'"'} & set(vocab.keys())
-        recent_tokens: List[str] = []
+        token_counts: Dict[str, int] = {}
 
         while index < max_length:
             if index == 0:
@@ -177,20 +183,12 @@ def generate_regex_value(
                 allowed = candidates
             allowed = allowed | quote_token
 
-            # break simple repetition (A, A) and 2-token oscillation
-            # (A, B, A, B) loops by banning whichever token would
-            # continue the pattern for this step
-            banned = set()
-            if len(recent_tokens) >= 2 and recent_tokens[-1] == recent_tokens[-2]:
-                banned.add(recent_tokens[-1])
-            if (
-                len(recent_tokens) >= 3
-                and recent_tokens[-1] == recent_tokens[-3]
-                and recent_tokens[-1] != recent_tokens[-2]
-            ):
-                banned.add(recent_tokens[-2])
-            if banned:
-                reduced = allowed - banned
+            # ban any token that has already reached its repeat cap --
+            # this breaks both direct repetition (A, A, A, ...) and
+            # longer oscillation loops (A, B, A, B, ...) in one rule
+            saturated = {t for t, c in token_counts.items() if c >= max_token_repeats}
+            if saturated:
+                reduced = allowed - saturated
                 if reduced:
                     allowed = reduced
 
@@ -200,7 +198,7 @@ def generate_regex_value(
             if token == '"':
                 break
 
-            recent_tokens.append(token)
+            token_counts[token] = token_counts.get(token, 0) + 1
 
             token_id = vocab[token]
             input_ids.append(token_id)
