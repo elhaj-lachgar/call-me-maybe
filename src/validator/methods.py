@@ -1,4 +1,3 @@
-"""Loading and Pydantic validation of the two project input JSON files."""
 import json
 from typing import List
 

@@ -1,10 +1,3 @@
-"""String and regex value generation via constrained decoding.
-
-Handles the two "open-content" parameter types (string and regex): unlike
-numbers or function names, there is no fixed target to match against, so
-generation is bounded by a closing quote (") instead, with extra structural
-rules for regex values.
-"""
 from typing import Set, Dict, List
 
 from llm_sdk import Small_LLM_Model
@@ -95,15 +88,6 @@ def generate_string(
         raise ValueError(f"failed to generate string: {e}")
 
 
-# --- regex-specific generation ------------------------------------------
-# Idea (adapted from a peer's implementation, kept isolated from the
-# generic generate_string above so the core logic we built together stays
-# untouched): a valid regex pattern almost always either starts with a
-# character class ('[') or an escape sequence ('\'), and never contains a
-# literal space. Forcing this structurally, instead of relying only on
-# prompting, is far more reliable for a small 0.6B model.
-
-
 def get_regex_candidate_tokens(vocab: Dict[str, int]) -> Set[str]:
     """Collect vocab tokens usable inside a regex value.
 
@@ -182,10 +166,6 @@ def generate_regex_value(
             else:
                 allowed = candidates
             allowed = allowed | quote_token
-
-            # ban any token that has already reached its repeat cap --
-            # this breaks both direct repetition (A, A, A, ...) and
-            # longer oscillation loops (A, B, A, B, ...) in one rule
             saturated = {t for t, c in token_counts.items() if c >= max_token_repeats}
             if saturated:
                 reduced = allowed - saturated
@@ -209,10 +189,7 @@ def generate_regex_value(
         if "\n" in text:
             text = text.split("\n")[0]
         text = text.strip().strip("'\"")
-        # collapse any run of repeated backslashes (e.g. "\\\\b" -> "\\b"):
-        # the model tends to double-escape backslashes as if writing
-        # directly into a JSON encoder, even though this raw text IS the
-        # final value.
+
         while "\\\\" in text:
             text = text.replace("\\\\", "\\")
         return text

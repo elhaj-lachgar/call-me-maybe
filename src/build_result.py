@@ -1,4 +1,3 @@
-"""Assembling per-prompt results into the final output JSON file."""
 from typing import Dict, List
 import json
 import os
@@ -59,6 +58,7 @@ def run_pipeline(
             obj = orchestrate_one_prompt(model, vocab, id_to_token, prompt, functions)
             res = build_result_object(prompt, obj)
             results.append(res)
+            print(res)
         except ValueError as e:
             print(f"skipping prompt {prompt.prompt!r}: {e}")
             continue
@@ -70,4 +70,6 @@ def run_pipeline(
         with open(output_path, mode="w", encoding="utf-8") as file:
             json.dump(results, file, indent=2)
     except OSError as e:
+        raise ValueError(f"failed to write output file: {e}")
+    except Exception as e:
         raise ValueError(f"failed to write output file: {e}")

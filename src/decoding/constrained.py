@@ -1,6 +1,3 @@
-"""Constrained decoding core: computing which vocab tokens are legal to
-generate next, given a fixed set of target strings (used for function
-names and boolean values)."""
 from typing import Set, Dict, List
 
 from llm_sdk import Small_LLM_Model

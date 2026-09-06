@@ -1,5 +1,3 @@
-"""Loading the model's vocabulary and building the id<->token mappings
-used throughout constrained decoding."""
 from typing import Dict
 import json
 

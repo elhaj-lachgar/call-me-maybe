@@ -1,6 +1,3 @@
-"""Prompt construction and per-prompt orchestration: builds the system
-prompt, generates the function name, then generates each parameter value
-with a targeted cue and the appropriate constrained-decoding function."""
 from typing import List, Dict, Optional
 import re
 from src.validator.models import Func, Prompt
@@ -10,13 +7,6 @@ from src.decoding.constrained import generate_constrained
 from src.decoding.number_handler import generate_number
 from src.encoding.validate_token import generate_string, generate_regex_value
 
-# --- regex few-shot examples -------------------------------------------
-# Kept as data so it's easy to find and extend. A 0.6B model doesn't
-# reliably generalize "regex" from a single distant example, so we give
-# several short pattern -> meaning pairs, placed close to where the model
-# actually has to produce one. Word-match examples use \b...\b so they
-# stay consistent with the structural rule enforced in generate_regex_value
-# (a regex value must start with '[' or '\').
 
 REGEX_PATTERN_EXAMPLES = [
     ("digits / numbers", r"\d+"),
@@ -106,7 +96,7 @@ def _extract_prompt_numbers(user_prompt: str) -> List[str]:
     Returns:
         The literal number substrings found, in order.
     """
-    return re.findall(r"-?\d+(?:\.\d+)?", user_prompt)
+    return re.findall(r"[+-]?\d+(?:\.\d+)?", user_prompt)
 
 
 def _func_has_regex_param(func: Func) -> bool:
@@ -121,8 +111,6 @@ def _func_has_regex_param(func: Func) -> bool:
     """
     return any("regex" in name.lower() for name in func.parameters)
 
-
-# --- prompt construction -------------------------------------------------
 
 def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
     """Build the full prompt text sent to the model for one request.
@@ -175,8 +163,6 @@ def append_text_to_input_ids(model: Small_LLM_Model, input_ids: List[int], text:
     extra_ids = encode_prompt(model, text)
     input_ids.extend(extra_ids)
 
-
-# --- orchestration ---------------------------------------------------------
 
 def orchestrate_one_prompt(
     model: Small_LLM_Model,

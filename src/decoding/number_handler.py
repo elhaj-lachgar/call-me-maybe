@@ -1,9 +1,3 @@
-"""Number value generation via constrained decoding.
-
-A number has no fixed target string, so instead of the
-compute_allowed/legal_words approach used for function names, each
-character is checked against digit/sign/decimal-point placement rules.
-"""
 from typing import Set, Dict, List
 
 from llm_sdk import Small_LLM_Model
