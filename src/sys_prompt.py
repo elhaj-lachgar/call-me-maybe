@@ -1,11 +1,14 @@
 from typing import List, Dict, Optional
 import re
 from src.validator.models import Func, Prompt
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
 from src.encoding.encoding_prompt import encode_prompt
 from src.decoding.constrained import generate_constrained
 from src.decoding.number_handler import generate_number
-from src.encoding.validate_token import generate_string, generate_regex_value
+from src.encoding.validate_token import (
+    generate_string,
+    generate_regex_value,
+)
 
 
 REGEX_PATTERN_EXAMPLES = [
@@ -22,7 +25,8 @@ def build_regex_hint_block() -> str:
     """Build a compact, human-readable list of example regex patterns.
 
     Returns:
-        A multi-line string listing each pattern description and example.
+        A multi-line string listing each pattern description and
+        example.
     """
     lines = ["Common regex patterns:"]
     for description, pattern in REGEX_PATTERN_EXAMPLES:
@@ -39,8 +43,14 @@ def build_regex_function_example() -> str:
         The example text block, including the pattern hint list.
     """
     text = 'Example for a function with a "regex" parameter:\n'
-    text += 'Function: fn_substitute_string_with_regex(source_string: string, regex: string, replacement: string)\n'
-    text += 'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' with X"\n'
+    text += (
+        'Function: fn_substitute_string_with_regex('
+        'source_string: string, regex: string, replacement: string)\n'
+    )
+    text += (
+        'Request: "Replace all digits in \'I have 3 cats and 7 dogs\' '
+        'with X"\n'
+    )
     text += (
         'Output: {"name": "fn_substitute_string_with_regex", '
         '"parameters": {"source_string": "I have 3 cats and 7 dogs", '
@@ -51,10 +61,10 @@ def build_regex_function_example() -> str:
 
 
 def _guess_regex_hint(user_prompt: str) -> Optional[str]:
-    """Scan the raw user request for clues about what regex pattern fits.
-    This does NOT set the final value -- it only strengthens the context
-    given to the model, which still generates the actual token sequence
-    itself via constrained decoding (generate_regex_value).
+    """Scan the raw user request for clues about what regex pattern
+    fits. This does NOT set the final value -- it only strengthens the
+    context given to the model, which still generates the actual token
+    sequence itself via constrained decoding (generate_regex_value).
 
     Args:
         user_prompt: The raw natural-language request.
@@ -86,9 +96,9 @@ def _guess_regex_hint(user_prompt: str) -> Optional[str]:
 
 
 def _extract_prompt_numbers(user_prompt: str) -> List[str]:
-    """Extract numbers written literally in the user request, in order of
-    appearance. Used only as a hint in the cue text -- the model still
-    generates the actual digits itself via constrained decoding.
+    """Extract numbers written literally in the user request, in order
+    of appearance. Used only as a hint in the cue text -- the model
+    still generates the actual digits itself via constrained decoding.
 
     Args:
         user_prompt: The raw natural-language request.
@@ -96,7 +106,7 @@ def _extract_prompt_numbers(user_prompt: str) -> List[str]:
     Returns:
         The literal number substrings found, in order.
     """
-    return re.findall(r"[+-]?\d+(?:\.\d+)?", user_prompt)
+    return re.findall(r"-?\d+(?:\.\d+)?", user_prompt)
 
 
 def _func_has_regex_param(func: Func) -> bool:
@@ -115,13 +125,14 @@ def _func_has_regex_param(func: Func) -> bool:
 def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
     """Build the full prompt text sent to the model for one request.
 
-    Ordering matters for small models: information placed closer to the
-    generation point tends to get more weight ("recency"), so the least
-    critical text (role description) goes first, and the actual user
-    request goes last, right before generation starts.
+    Ordering matters for small models: information placed closer to
+    the generation point tends to get more weight ("recency"), so the
+    least critical text (role description) goes first, and the actual
+    user request goes last, right before generation starts.
 
     Args:
-        user_prompt: The raw natural-language request from the test file.
+        user_prompt: The raw natural-language request from the test
+            file.
         functions: All available function definitions to advertise.
 
     Returns:
@@ -145,13 +156,18 @@ def build_prompt_text(user_prompt: str, functions: List[Func]) -> str:
     text += "Example:\n"
     text += 'Function: fn_add_numbers(a: number, b: number)\n'
     text += 'Request: "What is 4 plus 5?"\n'
-    text += 'Output: {"name": "fn_add_numbers", "parameters": {"a": 4, "b": 5}}\n\n'
+    text += (
+        'Output: {"name": "fn_add_numbers", '
+        '"parameters": {"a": 4, "b": 5}}\n\n'
+    )
 
     text += f"User request: {user_prompt}\nFunction name:"
     return text
 
 
-def append_text_to_input_ids(model: Small_LLM_Model, input_ids: List[int], text: str) -> None:
+def append_text_to_input_ids(
+    model: Small_LLM_Model, input_ids: List[int], text: str
+) -> None:
     """Encode extra text and append its ids to input_ids in place.
 
     Args:
@@ -164,6 +180,66 @@ def append_text_to_input_ids(model: Small_LLM_Model, input_ids: List[int], text:
     input_ids.extend(extra_ids)
 
 
+def _build_param_cue(
+    param_name: str,
+    param_type: str,
+    is_regex_param: bool,
+    prompt_text: str,
+    prompt_numbers: List[str],
+    number_param_index: int,
+) -> str:
+    """Build the cue text sent to the model right before it generates
+    one parameter's value, tailored to the parameter's type.
+
+    Args:
+        param_name: Name of the parameter being generated.
+        param_type: Declared type of the parameter.
+        is_regex_param: Whether this is a "regex"-named string param.
+        prompt_text: The original user request (for hint extraction).
+        prompt_numbers: Numbers already extracted from the request.
+        number_param_index: Index into prompt_numbers for this param.
+
+    Returns:
+        The cue text to append to input_ids before generation.
+    """
+    if is_regex_param:
+        hint = _guess_regex_hint(prompt_text)
+        if hint is not None:
+            return (
+                "\nGive ONLY a regular expression pattern for "
+                f"parameter '{param_name}'.\n"
+                f"Based on the request, the pattern is very likely: "
+                f"{hint}\nValue: \""
+            )
+        return (
+            "\nGive ONLY a regular expression pattern for parameter "
+            f"'{param_name}'.\n"
+            + build_regex_hint_block()
+            + "\nValue: \""
+        )
+
+    if param_type == "string":
+        return (
+            f"\nGive ONLY the string value for parameter '{param_name}', "
+            "nothing else.\nValue: \""
+        )
+
+    if param_type == "number" and number_param_index < len(prompt_numbers):
+        hint_number = prompt_numbers[number_param_index]
+        return (
+            f"\nGive ONLY the number value for parameter '{param_name}'. "
+            f"The request literally contains the number {hint_number}, "
+            "likely the value needed here. Output exactly that number, "
+            "followed immediately by a comma.\nValue:"
+        )
+
+    return (
+        f"\nGive ONLY the {param_type} value for parameter "
+        f"'{param_name}', followed immediately by a comma. "
+        "Do not add extra digits.\nValue:"
+    )
+
+
 def orchestrate_one_prompt(
     model: Small_LLM_Model,
     vocab: Dict[str, int],
@@ -171,9 +247,10 @@ def orchestrate_one_prompt(
     prompt: Prompt,
     functions: List[Func],
 ) -> Dict[str, object]:
-    """Run the full pipeline for a single prompt: build the prompt text,
-    generate the function name, then generate each parameter value with
-    a type-appropriate cue and constrained-decoding function.
+    """Run the full pipeline for a single prompt: build the prompt
+    text, generate the function name, then generate each parameter
+    value with a type-appropriate cue and constrained-decoding
+    function.
 
     Args:
         model: The loaded LLM wrapper.
@@ -204,70 +281,68 @@ def orchestrate_one_prompt(
                 break
 
         if matched_func is None:
-            raise ValueError(f"model produced unknown function name: {function_name}")
+            raise ValueError(
+                f"model produced unknown function name: {function_name}"
+            )
 
         parameters: Dict[str, object] = {}
         prompt_numbers = _extract_prompt_numbers(prompt.prompt)
         number_param_index = 0
 
         for param_name, param_info in matched_func.parameters.items():
-            is_regex_param = param_info.type == "string" and "regex" in param_name.lower()
+            is_regex_param = (
+                param_info.type == "string"
+                and "regex" in param_name.lower()
+            )
 
-            if is_regex_param:
-                hint = _guess_regex_hint(prompt.prompt)
-                if hint is not None:
-                    cue = (
-                        f"\nGive ONLY a regular expression pattern for parameter '{param_name}'.\n"
-                        f"Based on the request, the pattern is very likely: {hint}\n"
-                        "Value: \""
-                    )
-                else:
-                    cue = (
-                        f"\nGive ONLY a regular expression pattern for parameter '{param_name}'.\n"
-                        + build_regex_hint_block()
-                        + "\nValue: \""
-                    )
-            elif param_info.type == "string":
-                cue = f"\nGive ONLY the string value for parameter '{param_name}', nothing else.\nValue: \""
-            elif param_info.type == "number" and number_param_index < len(prompt_numbers):
-                hint_number = prompt_numbers[number_param_index]
-                cue = (
-                    f"\nGive ONLY the number value for parameter '{param_name}'. "
-                    f"The request literally contains the number {hint_number}, likely the value needed here. "
-                    "Output exactly that number, followed immediately by a comma.\nValue:"
-                )
+            cue = _build_param_cue(
+                param_name,
+                param_info.type,
+                is_regex_param,
+                prompt.prompt,
+                prompt_numbers,
+                number_param_index,
+            )
+            if param_info.type == "number":
                 number_param_index += 1
-            else:
-                cue = (
-                    f"\nGive ONLY the {param_info.type} value for parameter "
-                    f"'{param_name}', followed immediately by a comma. "
-                    "Do not add extra digits.\nValue:"
-                )
 
             append_text_to_input_ids(model, input_ids, cue)
 
             if param_info.type == "number":
-                raw_value = generate_number(model, vocab, id_to_token, input_ids)
+                raw_value = generate_number(
+                    model, vocab, id_to_token, input_ids
+                )
                 try:
                     value: object = float(raw_value)
                 except ValueError:
-                    raise ValueError(f"model produced invalid number for '{param_name}': {raw_value!r}")
+                    raise ValueError(
+                        f"model produced invalid number for "
+                        f"'{param_name}': {raw_value!r}"
+                    )
             elif is_regex_param:
                 regex_hint = _guess_regex_hint(prompt.prompt)
                 if regex_hint is not None:
                     value = generate_constrained(
-                        model, vocab, id_to_token, input_ids, {regex_hint}
+                        model, vocab, id_to_token, input_ids,
+                        {regex_hint},
                     )
                 else:
-                    value = generate_regex_value(model, vocab, id_to_token, input_ids)
+                    value = generate_regex_value(
+                        model, vocab, id_to_token, input_ids
+                    )
             elif param_info.type == "string":
-                value = generate_string(model, vocab, id_to_token, input_ids)
+                value = generate_string(
+                    model, vocab, id_to_token, input_ids
+                )
             elif param_info.type == "boolean":
                 value = generate_constrained(
-                    model, vocab, id_to_token, input_ids, {"true", "false"}
+                    model, vocab, id_to_token, input_ids,
+                    {"true", "false"},
                 )
             else:
-                raise ValueError(f"unsupported parameter type: {param_info.type}")
+                raise ValueError(
+                    f"unsupported parameter type: {param_info.type}"
+                )
             parameters[param_name] = value
 
         return {"name": function_name, "parameters": parameters}

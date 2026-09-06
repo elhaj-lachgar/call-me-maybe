@@ -1,7 +1,6 @@
 from typing import Dict
 import json
-
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
 
 
 def load_vocab(model: Small_LLM_Model) -> Dict[str, int]:

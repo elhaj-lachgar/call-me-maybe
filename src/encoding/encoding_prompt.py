@@ -1,18 +1,19 @@
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
 from typing import List
 
 
 def encode_prompt(model: Small_LLM_Model, text: str) -> List[int]:
-    """Load the model's vocabulary file as a token-string -> id mapping.
+    """Encode text into a list of token ids using the model's tokenizer.
 
     Args:
-        model: The loaded LLM wrapper, used to locate the vocab file.
+        model: The loaded LLM wrapper, used to encode the text.
+        text: The raw text to encode.
 
     Returns:
-        Mapping of token string to token id.
+        The encoded token ids as a plain list of ints.
 
     Raises:
-        ValueError: If the vocab file is missing or not valid JSON.
+        ValueError: If the text encodes to an empty tensor.
     """
     torser = model.encode(text)
     if torser.numel() == 0:

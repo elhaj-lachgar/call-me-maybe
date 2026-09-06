@@ -1,9 +1,10 @@
 from typing import Set, Dict, List
+from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
 
-from llm_sdk import Small_LLM_Model
 
-
-def compute_allowed(partial_output: str, vocab: Dict[str, int], legal_words: Set[str]) -> Set[str]:
+def compute_allowed(
+    partial_output: str, vocab: Dict[str, int], legal_words: Set[str]
+) -> Set[str]:
     """Compute which vocab tokens keep partial_output a valid prefix of at
     least one string in legal_words.
 
@@ -32,7 +33,12 @@ def compute_allowed(partial_output: str, vocab: Dict[str, int], legal_words: Set
     return allowed
 
 
-def pick_best_token(allowed: Set[str], vocab: Dict[str, int], logits: List[float], id_to_token: Dict[int, str]) -> str:
+def pick_best_token(
+    allowed: Set[str],
+    vocab: Dict[str, int],
+    logits: List[float],
+    id_to_token: Dict[int, str],
+) -> str:
     """Mask out every id not in `allowed` and return the highest-scoring
     allowed token.
 

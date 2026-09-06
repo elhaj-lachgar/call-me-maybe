@@ -1,13 +1,14 @@
 from typing import Dict, List
 import json
 import os
-
 from src.validator.models import Prompt, Func
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
 from src.sys_prompt import orchestrate_one_prompt
 
 
-def build_result_object(prompt: Prompt, orchestration_result: Dict[str, object]) -> Dict[str, object]:
+def build_result_object(
+    prompt: Prompt, orchestration_result: Dict[str, object]
+) -> Dict[str, object]:
     """Combine a prompt and its orchestration result into one output entry.
 
     Args:
@@ -55,10 +56,11 @@ def run_pipeline(
 
     for prompt in prompts:
         try:
-            obj = orchestrate_one_prompt(model, vocab, id_to_token, prompt, functions)
+            obj = orchestrate_one_prompt(
+                model, vocab, id_to_token, prompt, functions
+            )
             res = build_result_object(prompt, obj)
             results.append(res)
-            print(res)
         except ValueError as e:
             print(f"skipping prompt {prompt.prompt!r}: {e}")
             continue
@@ -70,6 +72,4 @@ def run_pipeline(
         with open(output_path, mode="w", encoding="utf-8") as file:
             json.dump(results, file, indent=2)
     except OSError as e:
-        raise ValueError(f"failed to write output file: {e}")
-    except Exception as e:
         raise ValueError(f"failed to write output file: {e}")

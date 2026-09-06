@@ -1,7 +1,5 @@
 from typing import Set, Dict, List
-
-from llm_sdk import Small_LLM_Model
-
+from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
 from src.decoding.constrained import pick_best_token
 
 
@@ -21,7 +19,11 @@ def is_allowed_number_char(c: str, partial_output: str) -> bool:
     return (
         c.isdigit()
         or ((c == "-" or c == "+") and partial_output == "")
-        or (c == "." and any(ch.isdigit() for ch in partial_output) and "." not in partial_output)
+        or (
+            c == "."
+            and any(ch.isdigit() for ch in partial_output)
+            and "." not in partial_output
+        )
     )
 
 
@@ -60,7 +62,9 @@ def get_number_candidate_tokens(vocab: Dict[str, int]) -> Set[str]:
     return {c for c in number_chars if c in vocab}
 
 
-def compute_allowed_number_tokens(candidates: Set[str], vocab: Dict[str, int], partial_output: str) -> Set[str]:
+def compute_allowed_number_tokens(
+    candidates: Set[str], vocab: Dict[str, int], partial_output: str
+) -> Set[str]:
     """Filter the number candidate tokens down to those legal right now.
 
     Args:
@@ -113,12 +117,16 @@ def generate_number(
         candidates = get_number_candidate_tokens(vocab)
         stop_tokens = {",", "}"} & set(vocab.keys())
         while len(partial) < max_len:
-            alloweds = compute_allowed_number_tokens(candidates, vocab, partial)
+            alloweds = compute_allowed_number_tokens(
+                candidates, vocab, partial
+            )
             allowed_with_stop = alloweds | stop_tokens
             if not allowed_with_stop:
                 break
             logits = model.get_logits_from_input_ids(input_ids)
-            token = pick_best_token(allowed_with_stop, vocab, logits, id_to_token)
+            token = pick_best_token(
+                allowed_with_stop, vocab, logits, id_to_token
+            )
             if token in stop_tokens:
                 break
             input_ids.append(vocab[token])

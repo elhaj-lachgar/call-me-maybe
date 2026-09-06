@@ -1,6 +1,5 @@
 import json
 from typing import List
-
 from src.validator.models import Func, Prompt
 
 
@@ -27,7 +26,9 @@ def func_validator(path: str, unath: List[str]) -> List[Func]:
     except FileNotFoundError:
         raise ValueError(f"functions definition file not found: {path}")
     except json.JSONDecodeError:
-        raise ValueError(f"functions definition file is not valid JSON: {path}")
+        raise ValueError(
+            f"functions definition file is not valid JSON: {path}"
+        )
 
 
 def prompt_validator(path: str, unath: List[str]) -> List[Prompt]:

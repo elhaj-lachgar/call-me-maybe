@@ -1,7 +1,5 @@
 from typing import Set, Dict, List
-
-from llm_sdk import Small_LLM_Model
-
+from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
 from src.decoding.constrained import pick_best_token
 
 
@@ -162,11 +160,17 @@ def generate_regex_value(
 
         while index < max_length:
             if index == 0:
-                allowed = {t for t in candidates if is_valid_regex_start_token(t)}
+                allowed = {
+                    t for t in candidates if is_valid_regex_start_token(t)
+                }
             else:
                 allowed = candidates
             allowed = allowed | quote_token
-            saturated = {t for t, c in token_counts.items() if c >= max_token_repeats}
+
+            saturated = {
+                t for t, c in token_counts.items()
+                if c >= max_token_repeats
+            }
             if saturated:
                 reduced = allowed - saturated
                 if reduced:
@@ -189,7 +193,6 @@ def generate_regex_value(
         if "\n" in text:
             text = text.split("\n")[0]
         text = text.strip().strip("'\"")
-
         while "\\\\" in text:
             text = text.replace("\\\\", "\\")
         return text
