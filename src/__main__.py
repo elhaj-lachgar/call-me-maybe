@@ -38,11 +38,11 @@ def get_arg() -> argparse.Namespace:
     )
     parser.add_argument("--functions_definition",
                         default="data/input/functions_definition.json",
-                        required=True, help="Path to functions_definition.json")
-    parser.add_argument("--input", required=True,
+                        help="Path to functions_definition.json")
+    parser.add_argument("--input",
                         default="data/input/function_calling_tests.json",
                         help="Path to function_calling_tests.json")
-    parser.add_argument("--output", required=True,
+    parser.add_argument("--output",
                         default="data/output/function_calling_results.jso",
                         help="Path to write function_calling_results.json")
     parser.add_argument("--model", default="Qwen/Qwen3-0.6B",
