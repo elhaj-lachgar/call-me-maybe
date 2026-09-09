@@ -1,5 +1,7 @@
+"""Loading and Pydantic validation of the two project input JSON files."""
 import json
 from typing import List
+
 from src.validator.models import Func, Prompt
 
 
@@ -29,6 +31,10 @@ def func_validator(path: str, unath: List[str]) -> List[Func]:
         raise ValueError(
             f"functions definition file is not valid JSON: {path}"
         )
+    except Exception as e:
+        raise ValueError(
+            f"failed to load file: {e}"
+        )
 
 
 def prompt_validator(path: str, unath: List[str]) -> List[Prompt]:
@@ -47,6 +53,10 @@ def prompt_validator(path: str, unath: List[str]) -> List[Prompt]:
         pydantic.ValidationError: If an entry doesn't match the Prompt
             schema; propagated to the caller to report precisely.
     """
+    if path in unath:
+        raise ValueError(
+            "the file not unathorized to open."
+        )
     try:
         with open(path, mode='r', encoding='utf-8') as file:
             data = json.load(file)
@@ -55,3 +65,7 @@ def prompt_validator(path: str, unath: List[str]) -> List[Prompt]:
         raise ValueError(f"input file not found: {path}")
     except json.JSONDecodeError:
         raise ValueError(f"input file is not valid JSON: {path}")
+    except Exception as e:
+        raise ValueError(
+            f"failed to load file: {e}"
+        )

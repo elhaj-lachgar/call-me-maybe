@@ -1,7 +1,10 @@
+"""Prompt construction and per-prompt orchestration: builds the system
+prompt, generates the function name, then generates each parameter value
+with a targeted cue and the appropriate constrained-decoding function."""
 from typing import List, Dict, Optional
 import re
 from src.validator.models import Func, Prompt
-from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
+from llm_sdk import Small_LLM_Model
 from src.encoding.encoding_prompt import encode_prompt
 from src.decoding.constrained import generate_constrained
 from src.decoding.number_handler import generate_number
@@ -224,13 +227,27 @@ def _build_param_cue(
             "nothing else.\nValue: \""
         )
 
+    if param_type == "integer":
+        return (
+            f"\nGive ONLY a whole integer value (no decimal point, "
+            f"e.g. 3, 42, -7) for parameter '{param_name}', followed "
+            "immediately by a comma.\nValue:"
+        )
+
     if param_type == "number" and number_param_index < len(prompt_numbers):
         hint_number = prompt_numbers[number_param_index]
         return (
             f"\nGive ONLY the number value for parameter '{param_name}'. "
             f"The request literally contains the number {hint_number}, "
-            "likely the value needed here. Output exactly that number, "
-            "followed immediately by a comma.\nValue:"
+            "likely the value needed here. Write it as a float, e.g. "
+            f"{hint_number}.0, followed immediately by a comma.\nValue:"
+        )
+
+    if param_type == "number":
+        return (
+            f"\nGive ONLY the number value for parameter '{param_name}' "
+            "as a float, e.g. 1.0, followed immediately by a comma. "
+            "Do not add extra digits.\nValue:"
         )
 
     return (
@@ -303,20 +320,35 @@ def orchestrate_one_prompt(
                 prompt_numbers,
                 number_param_index,
             )
-            if param_info.type == "number":
+            if param_info.type in ("number", "integer"):
                 number_param_index += 1
 
             append_text_to_input_ids(model, input_ids, cue)
 
             if param_info.type == "number":
                 raw_value = generate_number(
-                    model, vocab, id_to_token, input_ids
+                    model, vocab, id_to_token, input_ids,
+                    allow_decimal=True,
                 )
                 try:
+                    if "." not in raw_value:
+                        raise ValueError() 
                     value: object = float(raw_value)
                 except ValueError:
                     raise ValueError(
                         f"model produced invalid number for "
+                        f"'{param_name}': {raw_value!r}"
+                    )
+            elif param_info.type == "integer":
+                raw_value = generate_number(
+                    model, vocab, id_to_token, input_ids,
+                    allow_decimal=False,
+                )
+                try:
+                    value = int(raw_value)
+                except ValueError:
+                    raise ValueError(
+                        f"model produced invalid integer for "
                         f"'{param_name}': {raw_value!r}"
                     )
             elif is_regex_param:

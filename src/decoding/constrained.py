@@ -1,22 +1,26 @@
+"""Constrained decoding core: computing which vocab tokens are legal to
+generate next, given a fixed set of target strings (used for function
+names and boolean values)."""
 from typing import Set, Dict, List
-from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
+
+from llm_sdk import Small_LLM_Model
 
 
 def compute_allowed(
     partial_output: str, vocab: Dict[str, int], legal_words: Set[str]
 ) -> Set[str]:
-    """Compute which vocab tokens keep partial_output a valid prefix of at
-    least one string in legal_words.
+    """Compute which vocab tokens keep partial_output a valid prefix of
+    at least one string in legal_words.
 
     Args:
         partial_output: The text generated so far for this value.
         vocab: Mapping of token string to token id.
-        legal_words: The fixed set of exact target strings (e.g. function
-            names, or {"true", "false"} for booleans).
+        legal_words: The fixed set of exact target strings (e.g.
+            function names, or {"true", "false"} for booleans).
 
     Returns:
-        The set of token strings that would keep partial_output on track
-        toward at least one legal word.
+        The set of token strings that would keep partial_output on
+        track toward at least one legal word.
     """
     allowed = set()
     for word in legal_words:
@@ -39,8 +43,8 @@ def pick_best_token(
     logits: List[float],
     id_to_token: Dict[int, str],
 ) -> str:
-    """Mask out every id not in `allowed` and return the highest-scoring
-    allowed token.
+    """Mask out every id not in `allowed` and return the
+    highest-scoring allowed token.
 
     Args:
         allowed: The set of legal token strings for this step.
@@ -63,16 +67,18 @@ def generate_constrained(
     input_ids: List[int],
     legal_words: Set[str],
 ) -> str:
-    """Generate one of a fixed set of exact target strings via constrained
-    decoding (e.g. a function name, or "true"/"false" for a boolean).
+    """Generate one of a fixed set of exact target strings via
+    constrained decoding (e.g. a function name, or "true"/"false" for
+    a boolean).
 
     Args:
         model: The loaded LLM wrapper providing next-token logits.
         vocab: Mapping of token string to token id.
         id_to_token: Reverse mapping of token id to token string.
-        input_ids: Growing list of token ids representing the context so
-            far; mutated in place as new tokens are generated.
-        legal_words: The fixed set of exact strings the output must match.
+        input_ids: Growing list of token ids representing the context
+            so far; mutated in place as new tokens are generated.
+        legal_words: The fixed set of exact strings the output must
+            match.
 
     Returns:
         The generated string, guaranteed to be one of `legal_words`.

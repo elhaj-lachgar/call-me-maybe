@@ -1,5 +1,14 @@
+"""String and regex value generation via constrained decoding.
+
+Handles the two "open-content" parameter types (string and regex):
+unlike numbers or function names, there is no fixed target to match
+against, so generation is bounded by a closing quote (") instead, with
+extra structural rules for regex values.
+"""
 from typing import Set, Dict, List
-from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
+
+from llm_sdk import Small_LLM_Model
+
 from src.decoding.constrained import pick_best_token
 
 
@@ -41,18 +50,19 @@ def generate_string(
 ) -> str:
     """Generate a generic string value via constrained decoding.
 
-    Content is unconstrained (any non-quote token is allowed); generation
-    stops as soon as the model picks a closing double-quote, or after
-    max_length tokens as a safety net.
+    Content is unconstrained (any non-quote token is allowed);
+    generation stops as soon as the model picks a closing
+    double-quote, or after max_length tokens as a safety net.
 
     Args:
         model: The loaded LLM wrapper providing next-token logits.
         vocab: Mapping of token string to token id.
         id_to_token: Reverse mapping of token id to token string.
-        input_ids: Growing list of token ids representing the context so
-            far; mutated in place as new tokens are generated.
-        max_length: Maximum number of tokens to generate before forcing a
-            stop, in case the model never picks a closing quote.
+        input_ids: Growing list of token ids representing the context
+            so far; mutated in place as new tokens are generated.
+        max_length: Maximum number of tokens to generate before
+            forcing a stop, in case the model never picks a closing
+            quote.
 
     Returns:
         The decoded, stripped string value.
@@ -93,14 +103,15 @@ def get_regex_candidate_tokens(vocab: Dict[str, int]) -> Set[str]:
         vocab: Mapping of token string to token id.
 
     Returns:
-        The set of token strings containing neither a double quote nor a
-        literal space (regex patterns should not contain raw spaces).
+        The set of token strings containing neither a double quote nor
+        a literal space (regex patterns should not contain raw spaces).
     """
     return {key for key in vocab if '"' not in key and ' ' not in key}
 
 
 def is_valid_regex_start_token(token: str) -> bool:
-    """Check whether a token is a valid first character of a regex value.
+    """Check whether a token is a valid first character of a regex
+    value.
 
     Args:
         token: The candidate token string.
@@ -123,30 +134,31 @@ def generate_regex_value(
 ) -> str:
     """Generate a regex pattern value via constrained decoding.
 
-    Applies several extra rules on top of the generic string generator:
-    the first token must start a character class or escape sequence; a
-    frequency cap bans any single token once it has already appeared
-    max_token_repeats times in this value, which breaks both simple
-    repetition and longer oscillation loops (e.g. alternating between
-    two tokens many times); and the final decoded text has any run of
-    repeated backslashes collapsed to a single one, since the model has
-    a strong pretrained bias toward writing JSON-escaped double
-    backslashes even outside a JSON encoder.
+    Applies several extra rules on top of the generic string
+    generator: the first token must start a character class or
+    escape sequence; a frequency cap bans any single token once it
+    has already appeared max_token_repeats times in this value, which
+    breaks both simple repetition and longer oscillation loops; and
+    the final decoded text has any run of repeated backslashes
+    collapsed to a single one, since the model has a strong pretrained
+    bias toward writing JSON-escaped double backslashes even outside
+    a JSON encoder.
 
     Args:
         model: The loaded LLM wrapper providing next-token logits.
         vocab: Mapping of token string to token id.
         id_to_token: Reverse mapping of token id to token string.
-        input_ids: Growing list of token ids representing the context so
-            far; mutated in place as new tokens are generated.
-        max_length: Maximum number of tokens to generate before forcing a
-            stop.
-        max_token_repeats: Maximum number of times any single token may
-            appear in one generated value before being banned for the
-            rest of generation.
+        input_ids: Growing list of token ids representing the context
+            so far; mutated in place as new tokens are generated.
+        max_length: Maximum number of tokens to generate before
+            forcing a stop.
+        max_token_repeats: Maximum number of times any single token
+            may appear in one generated value before being banned for
+            the rest of generation.
 
     Returns:
-        The decoded, stripped, backslash-normalized regex pattern value.
+        The decoded, stripped, backslash-normalized regex pattern
+        value.
 
     Raises:
         ValueError: If generation fails for any reason.

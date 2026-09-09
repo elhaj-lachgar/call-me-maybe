@@ -1,21 +1,27 @@
+"""Entry point: parses CLI args, validates inputs, and runs the pipeline."""
 import argparse
+
 from pydantic import ValidationError
-from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
+from llm_sdk import Small_LLM_Model
+
 from src.validator.methods import func_validator, prompt_validator
 from src.decoding.vocab import load_vocab, build_id_to_token
 from src.build_result import run_pipeline
 
 
 def format_validation_error(source_name: str, err: ValidationError) -> str:
-    """Turn a pydantic ValidationError into a clear, human-readable message.
+    """Turn a pydantic ValidationError into a clear, human-readable
+    message.
 
     Args:
-        source_name: Which input file this error came from, for context.
+        source_name: Which input file this error came from, for
+            context.
         err: The ValidationError raised by pydantic.
 
     Returns:
-        A multi-line message listing each problem: where it is (the field
-        path) and what's wrong, instead of the raw pydantic error dump.
+        A multi-line message listing each problem: where it is (the
+        field path) and what's wrong, instead of the raw pydantic
+        error dump.
     """
     lines = [f"Validation error in {source_name}:"]
     for problem in err.errors():
@@ -58,8 +64,9 @@ def get_arg() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Program entry point: validate inputs, load the model, and run the
-    full function-calling pipeline, reporting any error gracefully."""
+    """Program entry point: validate inputs, load the model, and run
+    the full function-calling pipeline, reporting any error
+    gracefully."""
     parser = get_arg()
 
     try:

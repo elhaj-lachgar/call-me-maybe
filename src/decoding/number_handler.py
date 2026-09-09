@@ -1,11 +1,19 @@
+"""Number/integer value generation via constrained decoding.
+
+A number has no fixed target string, so instead of the
+compute_allowed/legal_words approach used for function names, each
+character is checked against digit/sign/decimal-point placement rules.
+"""
 from typing import Set, Dict, List
-from llm_sdk import Small_LLM_Model     # type: ignore[attr-defined]
+
+from llm_sdk import Small_LLM_Model
+
 from src.decoding.constrained import pick_best_token
 
 
 def is_allowed_number_char(c: str, partial_output: str) -> bool:
-    """Check whether a single character is legal at the current position
-    of a number being built.
+    """Check whether a single character is legal at the current
+    position of a number being built.
 
     Args:
         c: The candidate character.
@@ -28,11 +36,13 @@ def is_allowed_number_char(c: str, partial_output: str) -> bool:
 
 
 def is_token_allowed_as_number(token: str, partial_output: str) -> bool:
-    """Check whether every character of a multi-character token is legal,
-    applying is_allowed_number_char progressively as partial_output grows.
+    """Check whether every character of a multi-character token is
+    legal, applying is_allowed_number_char progressively as
+    partial_output grows.
 
     Args:
-        token: The candidate vocab token (may be more than one character).
+        token: The candidate vocab token (may be more than one
+            character).
         partial_output: The number text generated so far.
 
     Returns:
@@ -45,30 +55,37 @@ def is_token_allowed_as_number(token: str, partial_output: str) -> bool:
     return True
 
 
-def get_number_candidate_tokens(vocab: Dict[str, int]) -> Set[str]:
+def get_number_candidate_tokens(
+    vocab: Dict[str, int], allow_decimal: bool = True
+) -> Set[str]:
     """Collect the small, fixed set of number-related vocab tokens.
 
-    Only the ~14 possible number characters are checked, via direct
+    Only the possible number characters are checked, via direct
     dictionary lookup, instead of scanning the full ~150k-token vocab.
 
     Args:
         vocab: Mapping of token string to token id.
+        allow_decimal: If False, "." is excluded from the candidate
+            set entirely -- used to generate integers (no decimal
+            point ever possible), as opposed to floats.
 
     Returns:
-        The subset of "0123456789.-+" characters that exist as tokens
-        in this vocab.
+        The subset of number characters that exist as tokens in this
+        vocab.
     """
-    number_chars = "0123456789.-+"
+    number_chars = "0123456789-+" + ("." if allow_decimal else "")
     return {c for c in number_chars if c in vocab}
 
 
 def compute_allowed_number_tokens(
     candidates: Set[str], vocab: Dict[str, int], partial_output: str
 ) -> Set[str]:
-    """Filter the number candidate tokens down to those legal right now.
+    """Filter the number candidate tokens down to those legal right
+    now.
 
     Args:
-        candidates: The fixed candidate set from get_number_candidate_tokens.
+        candidates: The fixed candidate set from
+            get_number_candidate_tokens.
         vocab: Mapping of token string to token id.
         partial_output: The number text generated so far.
 
@@ -89,32 +106,39 @@ def generate_number(
     id_to_token: Dict[int, str],
     input_ids: List[int],
     max_len: int = 6,
+    allow_decimal: bool = True,
 ) -> str:
-    """Generate a number value via constrained decoding.
+    """Generate a number (or integer) value via constrained decoding.
 
     Stops as soon as the model picks a JSON structural stop token
     (comma or closing brace), or after max_len characters as a safety
     net, since the digit/sign/decimal rules alone never produce an
-    empty allowed set on their own.
+    empty allowed set on their own. The final value is decoded via
+    the model's own decode(), for consistency with generate_string /
+    generate_regex_value, rather than raw token concatenation.
 
     Args:
         model: The loaded LLM wrapper providing next-token logits.
         vocab: Mapping of token string to token id.
         id_to_token: Reverse mapping of token id to token string.
-        input_ids: Growing list of token ids representing the context so
-            far; mutated in place as new tokens are generated.
-        max_len: Maximum number of characters to generate before forcing
-            a stop.
+        input_ids: Growing list of token ids representing the context
+            so far; mutated in place as new tokens are generated.
+        max_len: Maximum number of characters to generate before
+            forcing a stop.
+        allow_decimal: If False, generates an integer (no "." ever
+            allowed); if True (default), generates a float-style
+            number.
 
     Returns:
-        The generated number as a string (to be parsed by the caller).
+        The generated number as a string (to be parsed by the
+        caller).
 
     Raises:
         ValueError: If generation fails for any reason.
     """
     try:
         partial = ""
-        candidates = get_number_candidate_tokens(vocab)
+        candidates = get_number_candidate_tokens(vocab, allow_decimal)
         stop_tokens = {",", "}"} & set(vocab.keys())
         while len(partial) < max_len:
             alloweds = compute_allowed_number_tokens(
@@ -129,7 +153,8 @@ def generate_number(
             )
             if token in stop_tokens:
                 break
-            input_ids.append(vocab[token])
+            token_id = vocab[token]
+            input_ids.append(token_id)
             partial += token
         return partial
     except Exception as e:
