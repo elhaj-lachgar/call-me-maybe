@@ -206,14 +206,6 @@ def _build_param_cue(
         The cue text to append to input_ids before generation.
     """
     if is_regex_param:
-        hint = _guess_regex_hint(prompt_text)
-        if hint is not None:
-            return (
-                "\nGive ONLY a regular expression pattern for "
-                f"parameter '{param_name}'.\n"
-                f"Based on the request, the pattern is very likely: "
-                f"{hint}\nValue: \""
-            )
         return (
             "\nGive ONLY a regular expression pattern for parameter "
             f"'{param_name}'.\n"
@@ -235,12 +227,11 @@ def _build_param_cue(
         )
 
     if param_type == "number" and number_param_index < len(prompt_numbers):
-        hint_number = prompt_numbers[number_param_index]
         return (
             f"\nGive ONLY the number value for parameter '{param_name}'. "
-            f"The request literally contains the number {hint_number}, "
-            "likely the value needed here. Write it as a float, e.g. "
-            f"{hint_number}.0, followed immediately by a comma.\nValue:"
+            f"Re-read the request: \"{prompt_text}\". "
+            "Write your answer as a float, e.g. 3.0, "
+            "followed immediately by a comma.\nValue:"
         )
 
     if param_type == "number":
@@ -352,16 +343,9 @@ def orchestrate_one_prompt(
                         f"'{param_name}': {raw_value!r}"
                     )
             elif is_regex_param:
-                regex_hint = _guess_regex_hint(prompt.prompt)
-                if regex_hint is not None:
-                    value = generate_constrained(
-                        model, vocab, id_to_token, input_ids,
-                        {regex_hint},
-                    )
-                else:
-                    value = generate_regex_value(
-                        model, vocab, id_to_token, input_ids
-                    )
+                value = generate_regex_value(
+                    model, vocab, id_to_token, input_ids
+                )
             elif param_info.type == "string":
                 value = generate_string(
                     model, vocab, id_to_token, input_ids

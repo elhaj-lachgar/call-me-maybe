@@ -65,6 +65,7 @@ def run_pipeline(
             )
             res = build_result_object(prompt, obj)
             results.append(res)
+            print(res)
         except ValueError as e:
             print(f"skipping prompt {prompt.prompt!r}: {e}")
             continue
