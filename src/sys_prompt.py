@@ -206,9 +206,14 @@ def _build_param_cue(
         The cue text to append to input_ids before generation.
     """
     if is_regex_param:
+        hint = _guess_regex_hint(prompt_text)
+        hint_line = (
+            f"A likely pattern shape is: {hint}\n" if hint else ""
+        )
         return (
             "\nGive ONLY a regular expression pattern for parameter "
-            f"'{param_name}'.\n"
+            f"'{param_name}'. Re-read the request: \"{prompt_text}\". "
+            + hint_line
             + build_regex_hint_block()
             + "\nValue: \""
         )
@@ -221,8 +226,8 @@ def _build_param_cue(
 
     if param_type == "integer":
         return (
-            f"\nGive ONLY a whole integer value (no decimal point, "
-            f"e.g. 3, 42, -7) for parameter '{param_name}', followed "
+            "\nGive ONLY a whole integer value (no decimal point) "
+            f"for parameter '{param_name}', followed "
             "immediately by a comma.\nValue:"
         )
 
@@ -230,14 +235,14 @@ def _build_param_cue(
         return (
             f"\nGive ONLY the number value for parameter '{param_name}'. "
             f"Re-read the request: \"{prompt_text}\". "
-            "Write your answer as a float, e.g. 3.0, "
+            "Write the parameter as a float, "
             "followed immediately by a comma.\nValue:"
         )
 
     if param_type == "number":
         return (
             f"\nGive ONLY the number value for parameter '{param_name}' "
-            "as a float, e.g. 1.0, followed immediately by a comma. "
+            "as a float, followed immediately by a comma. "
             "Do not add extra digits.\nValue:"
         )
 
@@ -323,7 +328,7 @@ def orchestrate_one_prompt(
                 )
                 try:
                     if "." not in raw_value:
-                        raise ValueError() 
+                        raise ValueError()
                     value: object = float(raw_value)
                 except ValueError:
                     raise ValueError(
@@ -343,9 +348,20 @@ def orchestrate_one_prompt(
                         f"'{param_name}': {raw_value!r}"
                     )
             elif is_regex_param:
-                value = generate_regex_value(
-                    model, vocab, id_to_token, input_ids
+                regex_hint = _guess_regex_hint(prompt.prompt)
+                is_category_hint = (
+                    regex_hint is not None
+                    and not regex_hint.startswith(r"\b")
                 )
+                if is_category_hint:
+                    value = generate_constrained(
+                        model, vocab, id_to_token, input_ids,
+                        {regex_hint}
+                    )
+                else:
+                    value = generate_regex_value(
+                        model, vocab, id_to_token, input_ids
+                    )
             elif param_info.type == "string":
                 value = generate_string(
                     model, vocab, id_to_token, input_ids
