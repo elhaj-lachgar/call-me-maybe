@@ -44,17 +44,17 @@ def get_arg() -> argparse.Namespace:
     )
     parser.add_argument(
         "--functions_definition",
-        required=True,
+        default="./data/input/functions_definition.json",
         help="Path to functions_definition.json",
     )
     parser.add_argument(
         "--input",
-        required=True,
+        default="data/input/function_calling_tests.json",
         help="Path to function_calling_tests.json",
     )
     parser.add_argument(
         "--output",
-        required=True,
+        default="data/output/function_calling_results.json",
         help="Path to write function_calling_results.json",
     )
     parser.add_argument(
@@ -103,6 +103,8 @@ def main() -> None:
         print(f"ERROR: {err}")
     except ValidationError as err:
         print(format_validation_error("model/pipeline", err))
+    except Exception as err:
+        print(f"ERROR: {err}")
 
 
 if __name__ == "__main__":

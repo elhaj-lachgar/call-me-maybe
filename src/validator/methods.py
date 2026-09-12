@@ -37,7 +37,7 @@ def func_validator(path: str, unath: List[str]) -> List[Func]:
         )
 
 
-def prompt_validator(path: str, unath: List[str]) -> List[Prompt]:
+def prompt_validator(path: str) -> List[Prompt]:
     """Load and validate the function_calling_tests.json file.
 
     Args:
@@ -53,10 +53,6 @@ def prompt_validator(path: str, unath: List[str]) -> List[Prompt]:
         pydantic.ValidationError: If an entry doesn't match the Prompt
             schema; propagated to the caller to report precisely.
     """
-    if path in unath:
-        raise ValueError(
-            "the file not unathorized to open."
-        )
     try:
         with open(path, mode='r', encoding='utf-8') as file:
             data = json.load(file)

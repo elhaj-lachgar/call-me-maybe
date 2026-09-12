@@ -5,6 +5,7 @@ from typing import Dict, Literal
 
 class Prompt(BaseModel):
     """One test entry: a single natural-language user request."""
+    model_config = ConfigDict(extra="forbid")
     prompt: str
 
 

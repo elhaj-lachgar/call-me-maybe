@@ -27,6 +27,8 @@ def load_vocab(model: Small_LLM_Model) -> Dict[str, int]:
         raise ValueError("file not found")
     except json.JSONDecodeError:
         raise ValueError("not valid path for json")
+    except Exception:
+        raise ValueError("failed to load vocab file.")
 
 
 def build_id_to_token(vocab: Dict[str, int]) -> Dict[int, str]:

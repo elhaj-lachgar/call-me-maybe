@@ -1,3 +1,4 @@
+"""Encoding raw prompt text into token ids using the model's tokenizer."""
 from llm_sdk import Small_LLM_Model
 from typing import List
 
