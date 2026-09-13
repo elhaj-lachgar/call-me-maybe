@@ -16,10 +16,7 @@ from src.encoding.validate_token import (
 
 REGEX_PATTERN_EXAMPLES = [
     ("digits / numbers", r"\d+"),
-    ("letters only", r"[a-zA-Z]+"),
     ("vowels", r"[aeiouAEIOU]"),
-    ("whitespace", r"\s+"),
-    ("punctuation", r"[^\w\s]"),
     ("a specific word, e.g. 'cat'", r"\bcat\b"),
 ]
 
@@ -327,8 +324,6 @@ def orchestrate_one_prompt(
                     allow_decimal=True,
                 )
                 try:
-                    if "." not in raw_value:
-                        raise ValueError()
                     value: object = float(raw_value)
                 except ValueError:
                     raise ValueError(
@@ -356,7 +351,7 @@ def orchestrate_one_prompt(
                 if is_category_hint:
                     value = generate_constrained(
                         model, vocab, id_to_token, input_ids,
-                        {regex_hint}
+                        {regex_hint},  # type: ignore[arg-type]
                     )
                 else:
                     value = generate_regex_value(
